@@ -1,10 +1,29 @@
-#include "MLP.hpp"
+#include <iostream>
+#include <vector>
 #include <fstream>
 #include <cmath>
 #include <stdexcept>
-#include <iostream>
 #include <cstdlib>  // Include for rand and srand
 #include <ctime>    // Include for time
+
+class MLP {
+public:
+    MLP(const std::vector<int>& layers, float learning_rate);
+    void train(const std::vector<std::vector<float>>& inputs, const std::vector<std::vector<float>>& labels, int epochs);
+    std::vector<float> predict(const std::vector<float>& input);
+    void save_model(const std::string& filename);
+    void load_model(const std::string& filename);
+
+private:
+    float activation_function(float x);
+    float dot_product(const std::vector<float>& v1, const std::vector<float>& v2);
+    std::vector<float> feedforward(const std::vector<float>& input);
+
+    std::vector<std::vector<std::vector<float>>> weights;
+    std::vector<std::vector<float>> biases;
+    float learning_rate;
+    float average_loss = 0.0f; // To track the average loss
+};
 
 MLP::MLP(const std::vector<int>& layers, float learning_rate) : learning_rate(learning_rate) {
     if (layers.size() < 2) {
@@ -82,18 +101,29 @@ void MLP::train(const std::vector<std::vector<float>>& inputs, const std::vector
             }
         }
 
+        average_loss = total_loss / inputs.size(); // Update average loss
+
         // Show progress in terminal
         if ((epoch + 1) % 100 == 0 || epoch == epochs - 1) {
-            std::cout << "Epoch " << (epoch + 1) << "/" << epochs << " - Loss: " << total_loss / inputs.size() << std::endl;
+            std::cout << "Epoch " << (epoch + 1) << "/" << epochs << " - Loss: " << average_loss << std::endl;
         }
     }
 }
 
 std::vector<float> MLP::predict(const std::vector<float>& input) {
-    if (input.size() != weights[0][0].size()) { // Assuming weights[0] is the input layer
+    if (input.size() != weights[0][0].size()) { 
         throw std::invalid_argument("Input size does not match the input layer size.");
     }
-    return feedforward(input);
+    
+    std::vector<float> output = feedforward(input);
+    
+    // Blend output with input based on the average loss
+    float blending_factor = std::min(1.0f, average_loss); // Ensure blending factor is between 0 and 1
+    for (size_t i = 0; i < output.size(); ++i) {
+        output[i] = (1 - blending_factor) * output[i] + blending_factor * input[i]; // Blend
+    }
+
+    return output;
 }
 
 void MLP::save_model(const std::string& filename) {

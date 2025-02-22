@@ -27,7 +27,15 @@ std::vector<float> load_image(const std::string& filename, int& width, int& heig
     return image; // Return the flat vector
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+    if (argc != 2) {
+        std::cerr << "Usage: " << argv[0] << " <epochs>" << std::endl;
+        return 1;
+    }
+
+    // Parse the number of epochs from the command-line argument
+    int epochs = std::stoi(argv[1]);
+
     // Load and preprocess image
     std::string image_filename = "image.bmp";
     int width, height;
@@ -48,7 +56,6 @@ int main() {
     std::vector<std::vector<float>> label_batch = {labels}; // Wrap label in a vector of vectors
 
     // Train the MLP
-    int epochs = 250;
     mlp.train(input_batch, label_batch, epochs); // Use the wrapped vectors
 
     // Save the trained model
