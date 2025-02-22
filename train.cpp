@@ -43,16 +43,12 @@ int main() {
     // Define labels (for simplicity, let's assume labels are the same as inputs for reconstruction)
     std::vector<float> labels = inputs; // Ensure labels are also flat
 
-    // Debugging prints for input and label sizes
-    std::cout << "Input size: " << inputs.size() << std::endl; // Should be width * height
-    std::cout << "Label size: " << labels.size() << std::endl; // Should be width * height
-
     // Create vectors of vectors for inputs and labels
     std::vector<std::vector<float>> input_batch = {inputs}; // Wrap input in a vector of vectors
     std::vector<std::vector<float>> label_batch = {labels}; // Wrap label in a vector of vectors
 
     // Train the MLP
-    int epochs = 1000;
+    int epochs = 250;
     mlp.train(input_batch, label_batch, epochs); // Use the wrapped vectors
 
     // Save the trained model
