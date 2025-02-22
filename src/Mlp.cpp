@@ -1,168 +1,137 @@
-#include "Mlp.h"
-#include <cmath>
+#include "MLP.hpp"
 #include <fstream>
-#include <iostream>
+#include <cmath>
 #include <stdexcept>
 
-glm::vec4 MLP::activate_derivative(const glm::vec4 &x) {
-  return glm::vec4(x.x > 0 ? 1.0f : 0.0f, x.y > 0 ? 1.0f : 0.0f,
-                   x.z > 0 ? 1.0f : 0.0f, x.w > 0 ? 1.0f : 0.0f);
+MLP::MLP(const std::vector<int>& layers, float learning_rate) : learning_rate(learning_rate) {
+    if (layers.size() < 2) {
+        throw std::invalid_argument("There must be at least two layers (input and output).");
+    }
+
+    // Initialize weights and biases
+    for (size_t i = 1; i < layers.size(); ++i) {
+        weights.push_back(std::vector<std::vector<float>>(layers[i], std::vector<float>(layers[i - 1])));
+        biases.push_back(std::vector<float>(layers[i], 0.0f)); // Initialize biases to 0
+    }
 }
 
-MLP::MLP(int input_size, int output_size, std::vector<int> hidden_layers,
-         float lr)
-    : learning_rate(lr), input_size(input_size), output_size(output_size),
-      hidden_layers(hidden_layers) {
-
-  previous_size = input_size; // Initialize previous_size with the input size
-
-  // Initialize weights and biases for hidden layers
-  for (int neurons : hidden_layers) {
-    glm::mat4 weight_matrix =
-        glm::mat4(0.0f); // Create weight matrix for the layer
-    // Randomly initialize weights here as needed
-    weights.push_back(weight_matrix);
-    biases.push_back(glm::vec4(0.0f)); // Initialize biases to zero
-    previous_size = neurons; // Update previous_size for the next layer
-  }
-
-  // Initialize weights and biases for the output layer
-  glm::mat4 output_weight_matrix =
-      glm::mat4(0.0f); // Create weight matrix for the output layer
-  // Randomly initialize weights here as needed
-  weights.push_back(output_weight_matrix);
-  biases.push_back(glm::vec4(0.0f)); // Initialize biases for output layer
-}
-
-// ReLU activation function
-glm::vec4 MLP::activate(const glm::vec4 &x) {
-  return glm::vec4(std::max(0.0f, x.x), std::max(0.0f, x.y),
-                   std::max(0.0f, x.z), std::max(0.0f, x.w));
-}
-
-// Feedforward function
-glm::vec4 MLP::feedforward(const glm::vec4 &input) {
-  glm::vec4 output = input;
-
-  for (size_t layer = 0; layer < weights.size(); ++layer) {
-    output = feedforward_internal(
-        output); // Pass the output of the previous layer to the next
-  }
-
-  return output; // Final output after all layers
-}
-
-glm::vec4 MLP::feedforward_internal(const glm::vec4 &input) {
-  glm::vec4 weighted_sum = input; // Start with the input for the first layer
-
-  for (size_t layer = 0; layer < weights.size(); ++layer) {
-    weighted_sum = weights[layer] * weighted_sum + biases[layer];
-    weighted_sum = activate(weighted_sum); // Apply activation after each layer
-  }
-
-  return weighted_sum;
-}
-
-// Training method
-void MLP::train(const std::vector<glm::vec4> &inputs,
-                const std::vector<glm::vec4> &targets, int epochs) {
-  {
-    // Training loop
+void MLP::train(const std::vector<std::vector<float>>& inputs, const std::vector<std::vector<float>>& labels, int epochs) {
     for (int epoch = 0; epoch < epochs; ++epoch) {
-      float total_loss = 0.0f;
+        for (size_t sample = 0; sample < inputs.size(); ++sample) {
+            // Forward pass
+            std::vector<std::vector<float>> activations;
+            activations.push_back(inputs[sample]);
+            for (size_t i = 0; i < weights.size(); ++i) {
+                std::vector<float> new_activations(weights[i].size());
+                for (size_t j = 0; j < weights[i].size(); ++j) {
+                    new_activations[j] = activation_function(dot_product(weights[i][j], activations.back()) + biases[i][j]);
+                }
+                activations.push_back(new_activations);
+            }
 
-      for (size_t i = 0; i < inputs.size(); ++i) {
-        glm::vec4 input = inputs[i];
-        glm::vec4 target = targets[i];
+            // Backward pass
+            std::vector<std::vector<float>> deltas(weights.size());
+            for (size_t i = weights.size(); i-- > 0;) {
+                deltas[i] = std::vector<float>(weights[i].size());
+                for (size_t j = 0; j < weights[i].size(); ++j) {
+                    if (i == weights.size() - 1) {
+                        // Output layer
+                        deltas[i][j] = (activations.back()[j] - labels[sample][j]) * activations.back()[j] * (1.0f - activations.back()[j]);
+                    } else {
+                        // Hidden layers
+                        float sum = 0.0f;
+                        for (size_t k = 0; k < weights[i + 1].size(); ++k) {
+                            sum += weights[i + 1][k][j] * deltas[i + 1][k];
+                        }
+                        deltas[i][j] = sum * activations[i + 1][j] * (1.0f - activations[i + 1][j]);
+                    }
+                }
+            }
 
-        // Forward pass
-        glm::vec4 output = feedforward(input);
+            // Update weights and biases
+            for (size_t i = 0; i < weights.size(); ++i) {
+                for (size_t j = 0; j < weights[i].size(); ++j) {
+                    for (size_t k = 0; k < weights[i][j].size(); ++k) {
+                        weights[i][j][k] -= learning_rate * deltas[i][j] * activations[i][k];
+                    }
+                    biases[i][j] -= learning_rate * deltas[i][j];
+                }
+            }
+        }
+    }
+}
 
-        // Calculate loss (MSE)
-        float loss = glm::dot(output - target, output - target);
-        total_loss += loss;
+std::vector<float> MLP::predict(const std::vector<float>& input) {
+    return feedforward(input);
+}
 
-        // Backpropagation
-        glm::vec4 error = output - target;    // Calculate output error
-        total_loss += glm::dot(error, error); // Add to total loss
+void MLP::save_model(const std::string& filename) {
+    std::ofstream file(filename, std::ios::binary);
+    if (!file.is_open()) {
+        throw std::runtime_error("Could not open file to save model.");
+    }
 
-        // Backpropagation loop
-        for (size_t layer = weights.size(); layer > 0; --layer) {
-          // Apply derivative of activation function for delta
-          glm::vec4 delta =
-              error *
-              activate_derivative(output); // Adjust for the correct output
+    for (const auto& layer_weights : weights) {
+        for (const auto& neuron_weights : layer_weights) {
+            file.write(reinterpret_cast<const char*>(neuron_weights.data()), neuron_weights.size() * sizeof(float));
+        }
+    }
 
-          // Update weights and biases
-          if (layer > 1) {
-            glm::vec4 input_to_layer =
-                inputs[i]; // Save the input for weight updates
-            weights[layer - 1] -=
-                learning_rate * glm::outerProduct(delta, input_to_layer);
-            biases[layer - 1] -= learning_rate * delta;
+    for (const auto& layer_biases : biases) {
+        file.write(reinterpret_cast<const char*>(layer_biases.data()), layer_biases.size() * sizeof(float));
+    }
 
-            // Calculate the error for the next layer
-            error = glm::transpose(weights[layer - 1]) * delta;
-          } else {
-            weights[layer - 1] -=
-                learning_rate * glm::outerProduct(delta, input);
-            biases[layer - 1] -= learning_rate * delta;
-          }
+    file.close();
+}
+
+void MLP::load_model(const std::string& filename) {
+    std::ifstream file(filename, std::ios::binary);
+    if (!file.is_open()) {
+        throw std::runtime_error("Could not open file to load model.");
+    }
+
+    for (auto& layer_weights : weights) {
+        for (auto& neuron_weights : layer_weights) {
+            file.read(reinterpret_cast<char*>(neuron_weights.data()), neuron_weights.size() * sizeof(float));
+        }
+    }
+
+    for (auto& layer_biases : biases) {
+        file.read(reinterpret_cast<char*>(layer_biases.data()), layer_biases.size() * sizeof(float));
+    }
+
+    file.close();
+}
+
+float MLP::activation_function(float x) {
+    return 1.0f / (1.0f + std::exp(-x)); // Sigmoid function
+}
+
+float MLP::dot_product(const std::vector<float>& v1, const std::vector<float>& v2) {
+    if (v1.size() != v2.size()) {
+        printf("v1.size() = %zu, v2.size() = %zu\n", v1.size(), v2.size());
+        throw std::invalid_argument("Vectors must be of the same size for dot product.");
+    }
+
+    float result = 0.0f;
+    for (size_t i = 0; i < v1.size(); ++i) {
+        result += v1[i] * v2[i];
+    }
+    return result;
+}
+
+std::vector<float> MLP::feedforward(const std::vector<float>& input) {
+    std::vector<float> activations = input;
+
+    for (size_t i = 0; i < weights.size(); ++i) {
+        std::vector<float> new_activations(weights[i].size());
+
+        for (size_t j = 0; j < weights[i].size(); ++j) {
+            new_activations[j] = activation_function(dot_product(weights[i][j], activations) + biases[i][j]);
         }
 
-        // Print the average loss for the epoch
-        std::cout << "Epoch " << epoch
-                  << ", Average Loss: " << total_loss / inputs.size()
-                  << std::endl;
-      }
+        activations = new_activations;
     }
-  }
-}
 
-// Load weights from a file
-void MLP::load_weights(const std::string &filename) {
-  std::ifstream file(filename);
-  if (!file) {
-    throw std::runtime_error("Unable to open file for loading weights.");
-  }
-  for (auto &weight_matrix : weights) {
-    for (int i = 0; i < 4; ++i) {
-      for (int j = 0; j < 4; ++j) {
-        file >> weight_matrix[i][j];
-      }
-    }
-  }
-
-  for (auto &bias_vector : biases) {
-    for (int i = 0; i < 4; ++i) {
-      file >> bias_vector[i];
-    }
-  }
-}
-
-// Save weights to a file
-void MLP::save_weights(const std::string &filename) {
-  std::ofstream file(filename);
-  if (!file) {
-    throw std::runtime_error("Unable to open file for saving weights.");
-  }
-
-  // Save weights
-  for (size_t layer = 0; layer < weights.size(); ++layer) {
-    for (int i = 0; i < weights[layer].length();
-         ++i) { // Adjust for actual size
-      for (int j = 0; j < weights[layer].length(); ++j) {
-        file << weights[layer][i][j] << " ";
-      }
-      file << std::endl;
-    }
-  }
-
-  // Save biases
-  for (size_t layer = 0; layer < biases.size(); ++layer) {
-    for (int i = 0; i < biases[layer].length(); ++i) { // Adjust for actual size
-      file << biases[layer][i] << " ";
-    }
-    file << std::endl;
-  }
+    return activations;
 }

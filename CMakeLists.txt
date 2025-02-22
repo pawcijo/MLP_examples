@@ -22,7 +22,7 @@ include_directories(src/)
 
 # Add the executable
 add_executable(TrainModel train.cpp
-                         src/Mlp.cpp)
+                         src/MLP.cpp)
 
 add_executable(ReconstructImage reconstruct.cpp
-                                src/Mlp.cpp)
+                                src/MLP.cpp)
