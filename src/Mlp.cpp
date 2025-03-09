@@ -6,24 +6,8 @@
 #include <cstdlib>  // Include for rand and srand
 #include <ctime>    // Include for time
 
-class MLP {
-public:
-    MLP(const std::vector<int>& layers, float learning_rate);
-    void train(const std::vector<std::vector<float>>& inputs, const std::vector<std::vector<float>>& labels, int epochs);
-    std::vector<float> predict(const std::vector<float>& input);
-    void save_model(const std::string& filename);
-    void load_model(const std::string& filename);
-
-private:
-    float activation_function(float x);
-    float dot_product(const std::vector<float>& v1, const std::vector<float>& v2);
-    std::vector<float> feedforward(const std::vector<float>& input);
-
-    std::vector<std::vector<std::vector<float>>> weights;
-    std::vector<std::vector<float>> biases;
-    float learning_rate;
-    float average_loss = 0.0f; // To track the average loss
-};
+// MLP.cpp
+#include "MLP.hpp"
 
 MLP::MLP(const std::vector<int>& layers, float learning_rate) : learning_rate(learning_rate) {
     if (layers.size() < 2) {
@@ -77,15 +61,15 @@ void MLP::train(const std::vector<std::vector<float>>& inputs, const std::vector
             for (size_t i = weights.size(); i-- > 0;) {
                 deltas[i] = std::vector<float>(weights[i].size());
                 for (size_t j = 0; j < weights[i].size(); ++j) {
-                    if (i == weights.size() - 1) {
-                        deltas[i][j] = (activations.back()[j] - labels[sample][j]) * activations.back()[j] * (1.0f - activations.back()[j]);
+                    if (i == weights.size() - 1) { // Output layer
+                        deltas[i][j] = (activations.back()[j] - labels[sample][j]) * activation_derivative(activations.back()[j]);
                         total_loss += std::pow(deltas[i][j], 2);
-                    } else {
+                    } else { // Hidden layers
                         float sum = 0.0f;
                         for (size_t k = 0; k < weights[i + 1].size(); ++k) {
                             sum += weights[i + 1][k][j] * deltas[i + 1][k];
                         }
-                        deltas[i][j] = sum * activations[i + 1][j] * (1.0f - activations[i + 1][j]);
+                        deltas[i][j] = sum * activation_derivative(activations[i + 1][j]);
                     }
                 }
             }
@@ -164,8 +148,12 @@ void MLP::load_model(const std::string& filename) {
     file.close();
 }
 
-float MLP::activation_function(float x) {
+inline float MLP::activation_function(float x) {
     return 1.0f / (1.0f + std::exp(-x)); // Sigmoid function
+}
+
+inline float MLP::activation_derivative(float x) {
+    return x * (1.0f - x); // Derivative of the sigmoid function
 }
 
 float MLP::dot_product(const std::vector<float>& v1, const std::vector<float>& v2) {
